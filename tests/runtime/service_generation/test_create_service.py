@@ -227,6 +227,41 @@ def test_create_inference_rpcs_uses_task_from_module_decorator_with_streaming():
     )  # OtherStreamingTask's out stream
 
 
+def test_create_inference_rpcs_includes_inherited_task():
+    @caikit.module(
+        id=str(uuid.uuid4()), name="something", version="0.0.0", task=SampleTask
+    )
+    class ParentModule(caikit.core.ModuleBase):
+        @SampleTask.taskmethod()
+        def run(self, sample_input: SampleInputType) -> SampleOutputType:
+            pass
+
+    @caikit.module(id=str(uuid.uuid4()), name="child", version="0.0.0", task=FirstTask)
+    class ChildModule(ParentModule):
+        @FirstTask.taskmethod()
+        def run(self, sample_input: SampleInputType) -> SampleOutputType:
+            pass
+
+    rpcs = create_inference_rpcs([ParentModule, ChildModule])
+    assert len(rpcs) == 2
+    _test_rpc(
+        rpcs,
+        task=SampleTask,
+        input_streaming=False,
+        output_streaming=False,
+        expected_name="SampleTaskPredict",
+        expected_module_list=[NewModule],
+    )
+    _test_rpc(
+        rpcs,
+        task=FirstTask,
+        input_streaming=False,
+        output_streaming=False,
+        expected_name="FirstTaskPredict",
+        expected_module_list=[NewChildModule],
+    )
+
+
 def _test_rpc(
     rpcs, task, input_streaming, output_streaming, expected_name, expected_module_list
 ):
